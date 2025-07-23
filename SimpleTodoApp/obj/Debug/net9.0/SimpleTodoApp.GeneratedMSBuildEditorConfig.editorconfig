@@ -1,0 +1,57 @@
+is_global = true
+build_property.TargetFramework = net9.0
+build_property.TargetFramework = net9.0
+build_property.TargetPlatformMinVersion = 
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = SimpleTodoApp
+build_property.RootNamespace = SimpleTodoApp
+build_property.ProjectDir = /home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 9.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = /home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 9.0
+build_property.EnableCodeStyleSeverity = 
+
+[/home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/Pages/Error.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvRXJyb3IuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/Pages/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/Pages/Privacy.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvUHJpdmFjeS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/Pages/Shared/_ValidationScriptsPartial.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvU2hhcmVkL19WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/Pages/_ViewImports.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvX1ZpZXdJbXBvcnRzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/Pages/_ViewStart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvX1ZpZXdTdGFydC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/mkanus/hedgus-workflow/10-k8s_CKA_exam/02-install_kubeadm/001-case-study/app-mehmetkanus/SimpleTodoApp/Pages/Shared/_Layout.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvU2hhcmVkL19MYXlvdXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = b-iikk1jf9kt

@@ -1,0 +1,216 @@
+name: CI/CD Pipeline for Application
+
+# 1.ADIM: pipeline'nın tetiklenmesi
+on:
+  push:
+    branches:
+      - main
+      - feature
+  pull_request:
+    branches:
+      - main
+      - feature
+  workflow_dispatch:
+    inputs:
+      # target-env:
+      #   description: 'Select target environment for deployment'
+      #   required: true
+      #   type: choice
+      #   options:
+      #     - dev
+      #     - prod
+      run-options:
+        description: 'Select run-options. (mandatory)'
+        required: true
+        default: 'only-build-job'
+        type: choice
+        options:
+        - only-build-job
+        - run-all
+      # only-build:
+      #   description: 'Only run build-and-test job'
+      #   required: false
+      #   type: boolean
+      # only-build:
+      #   description: 'Sadece build adımı çalıştırılsın mı?'
+      #   required: false
+      #   default: 'false'
+env:
+  APP_NAME: simple-todo-app
+  HARBOR_URL: harbor.prod.goxdev.lol
+  APP_IMAGE: harbor.prod.goxdev.lol/app-mehmetkanus/todoapp
+  GITOPS_REPO: ${{ github.repository_owner }}/manifest-mehmetkanus
+  DOCKERFILE_PATH: ./SimpleTodoApp/Dockerfile
+  APP_SOURCE_DIR: ./SimpleTodoApp
+  DEV_APP_URL: app.dev.goxdev.lol
+  PROD_APP_URL: app.prod.goxdev.lol
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write # DAST yorumları için gerekebilir
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # - name: SonarQube Static Analysis (SAST) # (2) Statik Kod Analizi
+      #   uses: SonarSource/sonarqube-scan-action@v5.2.0
+      #   with:
+      #     args: >
+      #       -Dsonar.projectKey=${{ env.APP_NAME }}
+      #       -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+      #       -Dsonar.sources=.
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   # SonarQube Quality Gate kontrolü eklenebilir
+      #   # - name: Wait for Quality Gate
+      #   #   uses: SonarSource/sonarqube-build-breaker@v1.0.0
+      #   #   env:
+      #   #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #   #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+# 2. ADIM: source kodların static kod analizi (SAST) ile taranması
+      - name: Trivy Filesystem Scan (SAST)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: table
+
+# 4. ADIM: image'in build edilip Harbor'a pushlanması
+    # a. image registry'e login 
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.HARBOR_URL }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+    # b. image tag'lerinin belirlenmesi
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.APP_IMAGE }}
+          tags: |
+            ${{ github.sha }}
+            latest
+    # c. image'in build edilmesi ve push'lanması
+      - name: Build and Push Docker Image to Harbor
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.APP_SOURCE_DIR }}
+          file: ${{ env.DOCKERFILE_PATH }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+    # d. oluşturulan image'in güvenlik analizi
+      - name: Trivy Image Scan (SAST - Image)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: '${{ env.APP_IMAGE }}:${{ github.sha }}'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
+
+# 5. ADIM: dev konfigürasyonu ile dev ortamına deploy edilmesi. (kustomize + githops (argocd))
+  deploy-to-dev:
+    needs: build-and-test
+    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Update GitOps deployment repo
+        run: |
+          git clone https://${{ secrets.GITOPS_PAT }}@github.com/${{ env.GITOPS_REPO }} gitops
+          cd gitops
+
+          # Güncel image tag'i
+          export APP_IMAGE="${{ env.APP_IMAGE }}"
+          export TAG="${{ github.sha }}"
+
+          sed -i "s|newTag: .*|newTag: ${TAG}|g" ./overlays/dev/kustomization.yaml
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add ./overlays/dev/kustomization.yaml
+          git commit -m "Update image:${{ env.APP_IMAGE }} tag to ${TAG}"
+          git push origin main
+
+# 6.ADIM: Dinamik Güvenlik Analizi (DAST) #
+  dynamic-analysis-DAST:
+    needs: deploy-to-dev
+    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Uygulamanın hazır olmasını bekle.
+        run: |
+          echo "app.dev.mehmetkanus.com sitesinin hazır olmasını bekleyin."
+          sleep 30
+
+      - name: ZAP Baseline Scan (DAST)
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          token: ${{ secrets.GITOPS_PAT }}
+          docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
+          target: 'https://${{ env.DEV_APP_URL }}'
+          cmd_options: '-a'
+          # rules_file_name: '.zap/rules.tsv'
+
+# 7.ADIM: Manuel Onay Adımı
+  manual-approval-for-prod:
+    needs: dynamic-analysis-DAST
+    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Manual approval to deploy to production
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.GITOPS_PAT }}
+          approvers: mehmetkanus17
+          minimum-approvals: 1
+          issue-title: "Deployment Approval for Production - ${{ github.sha }}"
+          issue-body: |
+            Uygulama ${{ github.sha }} versiyonu üretim ortamına dağıtılmak üzere hazır.
+            Lütfen inceleyin ve onaylamak için 'approve' veya reddetmek için 'deny' yazın.
+            DAST Raporları: [ZAP Raporları](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+# 8.ADIM: prod konfigürasyonu ile prod ortamına deploy edilmesi
+  deploy-to-prod:
+    needs: manual-approval-for-prod
+    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Update GitOps deployment repo
+        run: |
+          git clone https://${{ secrets.GITOPS_PAT }}@github.com/${{ env.GITOPS_REPO }} gitops
+          cd gitops
+
+          # Güncel image tag'i
+          export APP_IMAGE="${{ env.APP_IMAGE }}"
+          export TAG="${{ github.sha }}"
+
+          sed -i "s|newTag: .*|newTag: ${TAG}|g" ./overlays/prod/kustomization.yaml
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add ./overlays/prod/kustomization.yaml
+          git commit -m "Update image:${{ env.APP_IMAGE }} tag to ${TAG}"
+          git push origin main

@@ -1,0 +1,59 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "My To-Do List";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome to Your To-Do App!</h1>
+    <p>Manage your tasks efficiently.</p>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>Add New To-Do Item</h3>
+        </div>
+        <div class="card-body">
+            <form method="post" asp-page-handler="AddTodo">
+                <div class="form-group">
+                    <label for="newTodoTitle">Task Title:</label>
+                    <input type="text" class="form-control" id="newTodoTitle" name="Title" required />
+                </div>
+                <button type="submit" class="btn btn-primary mt-2">Add Task</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>Your Tasks</h3>
+        </div>
+        <ul class="list-group list-group-flush">
+            @if (Model.TodoItems != null && Model.TodoItems.Any())
+            {
+                @foreach (var item in Model.TodoItems)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center @(item.IsCompleted ? "list-group-item-success" : "")">
+                        <span class="@(item.IsCompleted ? "text-decoration-line-through" : "")">
+                            @item.Title
+                        </span>
+                        <div>
+                            @if (!item.IsCompleted)
+                            {
+                                <form method="post" asp-page-handler="Complete" asp-route-id="@item.Id" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success me-2">Complete</button>
+                                </form>
+                            }
+                            <form method="post" asp-page-handler="Delete" asp-route-id="@item.Id" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            </form>
+                        </div>
+                    </li>
+                }
+            }
+            else
+            {
+                <li class="list-group-item">No tasks yet! Add a new one above.</li>
+            }
+        </ul>
+    </div>
+</div>
