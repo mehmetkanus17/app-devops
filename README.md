@@ -1,34 +1,53 @@
-# CI/CD 
-Bu doküman, CI/CD (Sürekli Entegrasyon/Sürekli Dağıtım) sürecini detaylandırmaktadır. Proje, `.NET Core` ile geliştirilmiş örnek bir uygulama üzerinden **GitHub Actions** kullanılarak CI pipeline'ının oluşturulmasını ve **ArgoCD** gibi bir GitOps aracı ile CD süreçlerinin otomasyonunu kapsamaktadır. Temel felsefe **"her şeyi kod olarak yapmak"**, **"doğru iş için doğru aracı kullanmak"** ve **"modüler, genişleyebilir yapılar oluşturmak"** üzerine kurulmuştur.
+# CI/CD Pipeline for SimpleTodoApp
 
-## CI/CD Süreci
-Bu bölümde, projenin CI/CD aşamaları derinlemesine incelenecek ve kullanılan araçlar ile iş akışları adım adım açıklanacaktır.
+Bu README dosyası, `SimpleTodoApp` projesi için tasarlanmış Sürekli Entegrasyon/Sürekli Dağıtım (CI/CD) pipeline'ını detaylandırmaktadır. Pipeline, kod değişikliklerinin otomatik olarak test edilmesini, derlenmesini, konteyner imajlarının oluşturulmasını, güvenlik analizlerinin yapılmasını ve uygulamaların Kubernetes ortamına dağıtılmasını sağlar. Bu süreç, projenin hızlı, güvenilir ve güvenli bir şekilde geliştirilmesini ve dağıtılmasını hedefler.
 
-a. Uygulama Seçimi
-Proje için ilişkisel veritabanı **(Postgresql)** kullanan, veri kalıcılığı sağlayan (stateful) ve basit bir arayüze sahip bir `.NET Core` uygulaması kullanılmıştır.
+## İçindekiler
 
-b. Kod Deposunun Yapısı
-Uygulamanın kaynak kodu, app-[aday_ismi] (örneğin, app-mehmetkanus) adında ayrı bir Git deposunda bulunmaktadır. Bu yapı, uygulama kodunun versiyon kontrolü ve yönetimi için merkezi bir nokta sağlar.
+1.  Genel Bakış
+2.  Pipeline Tetikleyicileri
+3.  Ortam Değişkenleri
+4.  CI/CD Adımları (Jobs)
+    *   Build ve Test (build-and-test)
+    *   Dev Ortamına Dağıtım (deploy-to-dev)
+    *   Dinamik Güvenlik Analizi (dynamic-analysis-DAST)
+    *   Manuel Onay (manual-approval-for-prod)
+    *   Prod Ortamına Dağıtım (deploy-to-prod)
+5.  Kullanılan Araçlar ve Teknolojiler
+6.  CICD Felsefesi
 
-c. CD Süreçlerinin Tetiklenmesi
-Bu projenin önemli bir özelliği, CD işlemlerinin CI aracı tarafından doğrudan yapılmamasıdır. Bunun yerine, CI aracı (GitHub Actions), ArgoCD gibi bir CD aracını tetikleyerek dağıtımların otomatik olarak gerçekleşmesini sağlar. Bu yaklaşım, GitOps prensiplerine uygun olarak, Kubernetes kümesinin durumunun Git deposu üzerinden yönetilmesini ve dış müdahalelerle değil, yalnızca Git'teki değişikliklerle güncellenmesini sağlar. GitHub Actions, Kubernetes manifestlerinin bulunduğu GitOps deposuna gerekli push işlemlerini yaparak ArgoCD'nin devreye girmesini ve değişiklikleri algılamasını sağlar.
 
-d. Ortam Yapısı
-Tek bir Kubernetes kümesi içerisinde iki farklı ortam bulunmaktadır: dev (geliştirme) ve prod (üretim). Bu ortamlar, namespace seviyesinde birbirinden ayrılmıştır. Bu ayrım, geliştirme ve üretim ortamları arasında izolasyon sağlayarak olası hataların üretim ortamını etkilemesini engeller.
 
-e. Kubernetes Manifestleri ve Ortam Farklılıkları
-dev ve prod ortamlarına ait Kubernetes manifestleri, manifest-[aday_ismi] (örneğin, manifest-mehmetkanus) adında tek bir Git deposunda ve tek bir ana dalda (master/main) tutulmaktadır. Ortama özel değişen konfigürasyonlar ise Kustomization.yaml dosyaları ile yönetilmektedir. Bu sayede, manifestler tekrarlanmadan, ortamlar arası farklılıklar şeffaf bir şekilde yönetilebilir ve "her şeyi kod olarak yap" felsefesi pekiştirilir.
 
-f. CI Pipeline'ı (GitHub Actions)
-Uygulamanın CI pipeline'ı GitHub Actions kullanılarak oluşturulmuştur. Bu pipeline, uygulamanın sürekli entegrasyon sürecini otomatize eder ve aşağıdaki minimum adımları içerir:
+## 1. Genel Bakış
 
-GitHub Actions Workflow Dosyası İncelemesi
+Bu CI/CD pipeline, `SimpleTodoApp` projesinin geliştirme ve dağıtım süreçlerini otomatikleştirmek için GitHub Actions üzerinde yapılandırılmıştır. Pipeline, kod kalitesini ve güvenliğini sağlamak amacıyla çeşitli statik ve dinamik analiz araçlarını entegre ederken, uygulamaların `dev` ve `prod` ortamlarına güvenli ve kontrollü bir şekilde dağıtımını yönetir. GitOps prensipleri ArgoCD aracı kullanılarak Kubernetes manifestleri üzerinden dağıtım tetiklenir.
 
-Aşağıda, belirtilen CI/CD gereksinimlerini karşılamak üzere tasarlanmış GitHub Actions workflow dosyası adım adım açıklanmaktadır.
+Pipeline, aşağıdaki temel aşamalardan oluşur:
 
-````yaml
-name: CI/CD Pipeline for Application
-# 1.ADIM: pipeline'nın tetiklenmesi
+*   **Kod Değişikliklerinin Tetiklenmesi**: `main` veya `feature` dallarına yapılan `push` veya `pull_request` işlemleriyle ya da manuel olarak `workflow_dispatch` ile tetiklenir.
+*   **Derleme ve Test**: Uygulama kodunun derlenmesi, bağımlılıkların yönetilmesi ve birim/entegrasyon testlerinin çalıştırılması.
+*   **Güvenlik Analizleri**: Statik Uygulama Güvenlik Testi (SAST) ve Dinamik Uygulama Güvenlik Testi (DAST) araçları kullanılarak kod ve dağıtılan uygulamanın güvenlik açıklarının taranması.
+*   **Konteyner İmajı Oluşturma ve Yönetimi**: Uygulamanın Docker imajının oluşturulması, etiketlenmesi ve container registry olan Harbor'a gönderilmesi.
+*   **Kubernetes Dağıtımı**: Uygulamanın `dev` ve `prod` Kubernetes ortamlarına Kustomize ve GitOps (ArgoCD) aracılığıyla dağıtılması.
+*   **Manuel Onay**: Üretim ortamına dağıtımdan önce manuel onay adımı ile kontrol ve güvenlik sağlanması.
+
+Bu yapı, geliştiricilerin daha hızlı iterasyon yapmasına, hataları erken aşamada tespit etmesine ve üretim ortamına güvenli bir şekilde dağıtım yapmasına olanak tanır.
+
+
+
+
+## 2. Pipeline Tetikleyicileri
+
+CI/CD pipeline, çeşitli olaylar tarafından otomatik olarak tetiklenebilir veya manuel olarak başlatılabilir. Bu esneklik, geliştirme sürecinin farklı aşamalarına uyum sağlar.
+
+*   **`push` olayları**: `main` veya `feature` dallarına yapılan her kod `push` işlemi pipeline'ı tetikler. Bu, yeni kod değişikliklerinin sürekli olarak entegre edilmesini ve test edilmesini sağlar.
+
+*   **`pull_request` olayları**: `main` veya `feature` dallarına açılan `pull_request`'ler pipeline'ı tetikler. Bu, kod birleştirilmeden önce değişikliklerin doğrulanmasını ve potansiyel sorunların erken tespit edilmesini sağlar.
+
+*   **`workflow_dispatch`**: Bu tetikleyici, pipeline'ın GitHub Actions arayüzünden manuel olarak başlatılmasına olanak tanır. Manuel çalıştırmalar sırasında, kullanıcının `run-options` girdisi aracılığıyla belirli işleri (örneğin, sadece derleme işi veya tüm pipeline) çalıştırma seçeneği bulunur. Bu, özellikle hata ayıklama veya belirli bir iş akışını yeniden çalıştırma durumlarında faydalıdır.
+
+```yaml
 on:
   push:
     branches:
@@ -48,6 +67,15 @@ on:
         options:
         - only-build-job
         - run-all
+```
+
+Bu tetikleyiciler, geliştirme ekibine kod değişikliklerini hızlı bir şekilde doğrulamak ve dağıtım sürecini kontrol altında tutmak için gerekli otomasyonu ve esnekliği sağlar.
+
+## 3. Ortam Değişkenleri
+
+Pipeline genelinde kullanılan önemli ortam değişkenleri, yapılandırmanın merkezi ve kolay yönetilebilir olmasını sağlar. Bu değişkenler, uygulama adı, container registry bilgileri, GitOps deposu (manifest-mehmetkanus) ve uygulama kaynak dizinleri gibi kritik bilgileri içerir.
+
+```yaml
 env:
   APP_NAME: simple-todo-app
   HARBOR_URL: harbor.prod.goxdev.lol
@@ -57,231 +85,255 @@ env:
   APP_SOURCE_DIR: ./SimpleTodoApp
   DEV_APP_URL: app.dev.goxdev.lol
   PROD_APP_URL: app.prod.goxdev.lol
-````
-1. Pipeline'ın Tetiklenmesi (on):
-Pipeline, aşağıdaki olaylarla tetiklenir:
+```
 
-push: main veya feature dallarına yapılan push işlemleri.
+*   **`APP_NAME`**: Uygulamanın adı (`simple-todo-app`).
+*   **`HARBOR_URL`**: Konteyner imajlarının depolandığı Harbor registry URL adresi.
+*   **`APP_IMAGE`**: Uygulamanın tam imaj yolu ve adı.
+*   **`GITOPS_REPO`**: Kubernetes manifestlerinin bulunduğu GitOps deposunun adı. Bu depo, ArgoCD CD aracı tarafından izlenir.
+*   **`DOCKERFILE_PATH`**: Uygulamanın Dockerfile dosyasının yolu.
+*   **`APP_SOURCE_DIR`**: Uygulama kaynak kodunun bulunduğu dizin.
+*   **`DEV_APP_URL`**: Geliştirme ortamında dağıtılan uygulamanın URL adresi.
+*   **`PROD_APP_URL`**: Üretim ortamında dağıtılan uygulamanın URL adresi.
 
-pull_request: main veya feature dallarına açılan pull request'ler.
+Bu ortam değişkenleri, pipeline adımlarının dinamik olarak yapılandırılmasını ve farklı ortamlar veya uygulamalar için kolayca yeniden kullanılabilmesini sağlar.
 
-workflow_dispatch: Manuel olarak tetiklenebilen bir seçenektir. run-options girişi ile sadece build adımını çalıştırma (only-build-job) veya tüm pipeline'ı çalıştırma (run-all) seçeneği sunar. Bu, özellikle geliştirme ve test süreçlerinde esneklik sağlar.
+## 4. CI/CD Adımları (Jobs)
 
-Ortam Değişkenleri (env):
-Pipeline genelinde kullanılan çeşitli ortam değişkenleri tanımlanmıştır. Bu değişkenler, uygulama adı, Harbor URL'si, Docker imaj adı, GitOps deposu URL'si gibi bilgileri içerir ve kodun daha okunabilir ve yönetilebilir olmasını sağlar.
+Pipeline, uygulamanın yaşam döngüsünün farklı aşamalarını temsil eden bir dizi işten (jobs) oluşur. Her iş, belirli bir görevi yerine getirir ve bir sonraki işin başlaması için ön koşul olabilir.
 
-````yaml
-jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      pull-requests: write # DAST yorumları için gerekebilir
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
+### Build ve Test (`build-and-test`)
 
-# 2. ADIM: source kodların static kod analizi (SAST) ile taranması
-      - name: Trivy Filesystem Scan (SAST)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
-          format: table
-````
-(1) Kod Değişikliklerinin Tetiklenmesi ve (2) Statik Kod Analizi (SAST):
+Bu iş, uygulamanın kaynak kodunu derlemek, test etmek ve Docker imajını oluşturup Harbor registry'ye göndermekten sorumludur. Ayrıca, kod ve imaj üzerinde statik güvenlik analizleri (SAST) yapar.
 
-Adım (1) - Kod Değişikliklerinin Tetiklenmesi: Geliştirici, kodu bir feature dalında değiştirir ve bu değişiklikleri uzak feature dalına pushladığında pipeline tetiklenir. pull_request veya main dalına push durumları da pipeline'ı otomatik olarak başlatır.
+*   **`runs-on: ubuntu-latest`**: İşin Ubuntu işletim sistemine sahip bir GitHub Actions runner üzerinde çalışacağını belirtir.
+*   **`permissions`**: İşin ihtiyaç duyduğu izinleri tanımlar: `contents: read` (depo içeriğini okuma), `packages: write` (paket yazma) ve `pull-requests: write` (DAST yorumları için gerekli olabilir).
 
-Adım (2) - Statik Kod Analizi (SAST): Trivy Filesystem Scan (SAST) adımı ile yeni kod değişiklikleri statik bir kod analiz aracı olan Trivy ile taranır. Bu tarama, kod tabanındaki potansiyel güvenlik açıklarını, hataları ve kötü kodlama alışkanlıklarını tespit etmeye yardımcı olur. CRITICAL ve HIGH seviyesindeki güvenlik zafiyetleri için pipeline'ın başarısız olması (exit-code: '1') sağlanarak kalitenin düşürülmesi engellenir.
+#### Adımlar:
 
-````yaml
-# 4. ADIM: image'in build edilip Harbor'a pushlanması
-    # a. image registry'e login 
-      - name: Login to Harbor
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.HARBOR_URL }}
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
+1.  **Checkout Source Code**: Uygulamanın kaynak kodunu runner ortamına çeker.
+    ```yaml
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+    ```
 
-    # b. image tag'lerinin belirlenmesi
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.APP_IMAGE }}
-          tags: |
-            ${{ github.sha }}
-            latest
-    # c. image'in build edilmesi ve push'lanması
-      - name: Build and Push Docker Image to Harbor
-        id: push
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ env.APP_SOURCE_DIR }}
-          file: ${{ env.DOCKERFILE_PATH }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-    # d. oluşturulan image'in güvenlik analizi
-      - name: Trivy Image Scan (SAST - Image)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: '${{ env.APP_IMAGE }}:${{ github.sha }}'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
-          format: 'table'
-````
-(3) Kodun Derlenmesi ve (4) Konteyner İmajının Oluşturulması ve Harbor'a Pushlanması:
+2.  **Trivy Filesystem Scan (SAST)**: Kaynak kod üzerinde dosya sistemi tabanlı statik güvenlik analizi yapar. `CRITICAL` ve `HIGH` önem derecesindeki güvenlik açıklarını tarar ve düzeltilmemiş olanları göz ardı eder. Herhangi bir kritik veya yüksek güvenlik açığı bulunursa pipeline başarısız olur (`exit-code: '1'`).
+    ```yaml
+    - name: Trivy Filesystem Scan (SAST)
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        exit-code: '1'
+        severity: 'CRITICAL,HIGH'
+        ignore-unfixed: true
+        format: table
+    ```
 
-Adım (3) - Kodun Derlenmesi: GitHub Actions workflow'unda açıkça bir ".NET Core derleme" adımı görünmemektedir, ancak docker/build-push-action kullanılırken Dockerfile içindeki .NET SDK komutları (örneğin, dotnet publish) sayesinde kod derlenmiş ve çıktıları konteyner imajına dahil edilmiştir. Bu, "doğru iş için doğru aracı kullan" felsefesine uygun olarak Docker'ın kendi build mekanizması içinde derleme işlemini gerçekleştirmesi anlamına gelir.
+3.  **Login to Harbor**: Docker imajını Harbor registry'ye göndermek için kimlik doğrulaması yapar. Harbor kullanıcı adı ve parolası GitHub Secrets olarak saklanır.
+    ```yaml
+    - name: Login to Harbor
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.HARBOR_URL }}
+        username: ${{ secrets.HARBOR_USERNAME }}
+        password: ${{ secrets.HARBOR_PASSWORD }}
+    ```
 
-Adım (4) - Konteyner İmajının Oluşturulması ve Harbor'a Pushlanması:
+4.  **Extract metadata (tags, labels) for Docker**: Docker imajı için etiketler (tag) ve meta veriler oluşturur. `github.sha` (commit hash) ve `latest` etiketleri kullanılır.
+    ```yaml
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.APP_IMAGE }}
+        tags: |
+          ${{ github.sha }}
+          latest
+    ```
 
-Harbor'a Giriş (Login to Harbor): İlk olarak, uygulamanın konteyner imajını depolayacak olan Harbor Image Registry'ye kimlik doğrulama işlemi yapılır. Güvenlik için kimlik bilgileri GitHub Secrets (secrets.HARBOR_USERNAME, secrets.HARBOR_PASSWORD) kullanılarak yönetilir.
+5.  **Build and Push Docker Image to Harbor**: Uygulamanın Dockerfile dosyasını kullanarak Docker imajını oluşturur ve etiketlenmiş imajı Harbor registry'ye gönderir.
+    ```yaml
+    - name: Build and Push Docker Image to Harbor
+      id: push
+      uses: docker/build-push-action@v6
+      with:
+        context: ${{ env.APP_SOURCE_DIR }}
+        file: ${{ env.DOCKERFILE_PATH }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+    ```
 
-İmaj Etiketlerinin Belirlenmesi (Extract metadata for Docker): github.sha (commit hash) ve latest etiketleri kullanılarak imaj için meta veriler oluşturulur. github.sha'nın kullanılması, her imajın belirli bir kod değişikliği ile eşleşmesini sağlayarak izlenebilirliği artırır.
+6.  **Trivy Image Scan (SAST - Image)**: Oluşturulan Docker imajı üzerinde statik güvenlik analizi yapar. `CRITICAL` ve `HIGH` önem derecesindeki güvenlik açıklarını tarar ve düzeltilmemiş olanları göz ardı eder. Bu tarama, imajın içeriğindeki bilinen güvenlik açıklarını tespit etmeyi amaçlar.
+    ```yaml
+    - name: Trivy Image Scan (SAST - Image)
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        image-ref: '${{ env.APP_IMAGE }}:${{ github.sha }}'
+        exit-code: '0'
+        severity: 'CRITICAL,HIGH'
+        ignore-unfixed: true
+        format: 'table'
+    ```
 
-İmajın Oluşturulması ve Push'lanması (Build and Push Docker Image to Harbor): docker/build-push-action kullanılarak uygulama kodu Dockerfile üzerinden bir konteyner imajına dönüştürülür ve Harbor'a push edilir.
+Bu iş, uygulamanın dağıtıma hazır bir Docker imajına dönüştürülmesini ve temel güvenlik kontrollerinden geçmesini sağlar.
 
-Oluşturulan İmajın Güvenlik Analizi (Trivy Image Scan (SAST - Image)): Trivy kullanılarak yeni oluşturulan Docker imajı güvenlik zafiyetlerine karşı taranır. Bu, imajın içerdiği kütüphanelerde ve bağımlılıklarda bilinen güvenlik açıklarının tespit edilmesine yardımcı olur.
+### Dev Ortamına Dağıtım (`deploy-to-dev`)
 
-````yaml
-  deploy-to-dev:
-    needs: build-and-test
-    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
+Bu iş, uygulamanın geliştirme (dev) ortamına dağıtımını yönetir. GitOps prensiplerine uygun olarak, Kubernetes manifestlerinin bulunduğu GitOps deposunu güncelleyerek dağıtımı tetikler.
 
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Update GitOps deployment repo
-        run: |
-          git clone https://${{ secrets.GITOPS_PAT }}@github.com/${{ env.GITOPS_REPO }} gitops
-          cd gitops
+*   **`needs: build-and-test`**: Bu işin `build-and-test` işi başarıyla tamamlandıktan sonra çalışacağını belirtir.
+*   **`if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'`**: Bu koşul, işin yalnızca `workflow_dispatch` olayı tarafından tetiklenmediğinde veya `workflow_dispatch` ile tetiklendiğinde `run-all` seçeneği belirlendiğinde çalışmasını sağlar.
 
-          # Güncel image tag'i
-          export APP_IMAGE="${{ env.APP_IMAGE }}"
-          export TAG="${{ github.sha }}"
+#### Adımlar:
 
-          sed -i "s|newTag: .*|newTag: ${TAG}|g" ./overlays/dev/kustomization.yaml
+1.  **Update GitOps deployment repo**: Bu adım, uygulamanın yeni imaj etiketini (tag) GitOps deposundaki `dev` ortamına ait `kustomization.yaml` dosyasına yazar. Bu değişiklik, ArgoCD aracı tarafından algılanacak ve uygulamanın `dev` ortamında güncellenmiş imaj ile dağıtılmasını tetikleyecektir.
 
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add ./overlays/dev/kustomization.yaml
-          git commit -m "Update image:${{ env.APP_IMAGE }} tag to ${TAG}"
-          git push origin main
-````
-(5) Dev Ortamına Dağıtımın Tetiklenmesi:
+    ```bash
+    - name: Update GitOps deployment repo
+      run: |
+        git clone https://${{ secrets.GITOPS_PAT }}@github.com/${{ env.GITOPS_REPO }} gitops
+        cd gitops
 
-deploy-to-dev Job'u: Bu adım, build-and-test job'ı başarıyla tamamlandıktan sonra çalışır. workflow_dispatch tetiklemesi durumunda eğer run-options run-all seçilmediyse bu adım atlanır.
+        # Güncel image tag\`i
+        export APP_IMAGE="${{ env.APP_IMAGE }}"
+        export TAG="${{ github.sha }}"
 
-GitOps Deposu Güncelleme (Update GitOps deployment repo): CI aracı (GitHub Actions), Kubernetes manifestlerinin bulunduğu GitOps deposuna (manifest-mehmetkanus) erişir. Burada dev ortamına ait kustomization.yaml dosyası içinde uygulamanın yeni imaj etiketi (github.sha) güncellenir. Bu değişiklik, Git deposuna commit edilir ve main dalına pushlanır.
+        sed -i "s|newTag: .*|newTag: ${TAG}|g" ./overlays/dev/kustomization.yaml
 
-ArgoCD Tetiklenmesi: GitOps deposundaki bu değişiklik, otomatik olarak ArgoCD tarafından algılanır. ArgoCD, kustomization.yaml dosyasındaki yeni imaj etiketini görür ve buna göre dev ortamındaki uygulamanın dağıtımını otomatik olarak günceller. Bu sayede, CI aracı doğrudan Kubernetes kümesine erişmek yerine, GitOps deposu üzerinden CD sürecini tetiklemiş olur.
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add ./overlays/dev/kustomization.yaml
+        git commit -m "Update image:${{ env.APP_IMAGE }} tag to ${TAG}"
+        git push origin main
+    ```
 
-````yaml
-# 6.ADIM: Dinamik Güvenlik Analizi (DAST) #
-  dynamic-analysis-DAST:
-    needs: deploy-to-dev
-    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Uygulamanın hazır olmasını bekle.
-        run: |
-          echo "app.dev.mehmetkanus.com sitesinin hazır olmasını bekleyin."
-          sleep 30
+Bu iş, uygulamanın `dev` ortamında sürekli olarak güncel kalmasını ve geliştiricilerin en son değişiklikleri hızlı bir şekilde test etmesini sağlar.
 
-      - name: ZAP Baseline Scan (DAST)
-        uses: zaproxy/action-baseline@v0.14.0
-        with:
-          token: ${{ secrets.GITOPS_PAT }}
-          docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
-          target: 'https://${{ env.DEV_APP_URL }}'
-          cmd_options: '-a'
-````
+### Dinamik Güvenlik Analizi (`dynamic-analysis-DAST`)
 
-(6) Dinamik Güvenlik Analizi (DAST):
+Bu iş, uygulama `dev` ortamına dağıtıldıktan sonra dinamik güvenlik analizi (DAST) yapar. Bu analiz, çalışan uygulamanın güvenlik açıklarını tespit etmeyi amaçlar.
 
-dynamic-analysis-DAST Job'u: deploy-to-dev job'ı tamamlandıktan sonra bu adım devreye girer.
+*   **`needs: deploy-to-dev`**: Bu işin `deploy-to-dev` işi başarıyla tamamlandıktan sonra çalışacağını belirtir.
+*   **`if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'`**: Bu koşul, işin yalnızca `workflow_dispatch` olayı tarafından tetiklenmediğinde veya `workflow_dispatch` ile tetiklendiğinde `run-all` seçeneği belirlendiğinde çalışmasını sağlar.
 
-Uygulamanın Hazır Olmasını Bekleme: DAST taramasından önce, dev ortamına dağıtılan uygulamanın tamamen başlatılmasını ve erişilebilir olmasını sağlamak için kısa bir bekleme süresi (sleep 30) eklenmiştir.
+#### Adımlar:
 
-ZAP Baseline Scan (DAST): Uygulama dev ortamında çalışmaya başladıktan sonra, OWASP ZAP (Zed Attack Proxy) kullanılarak dinamik güvenlik analizi (DAST) yapılır. ZAP, çalışan uygulamayı tarayarak potansiyel güvenlik açıklarını (örneğin, SQL Injection, XSS) gerçek zamanlı olarak tespit etmeye çalışır. Bu adım, uygulamanın çalıştığı ortamdaki güvenlik zafiyetlerini bulmak için önemlidir.
+1.  **Uygulamanın hazır olmasını bekle**: DAST taramasına başlamadan önce uygulamanın `dev` ortamında tamamen ayağa kalktığından emin olmak için kısa bir bekleme süresi ekler.
+    ```yaml
+    - name: Uygulamanın hazır olmasını bekle.
+      run: |
+        echo "app.dev.mehmetkanus.com sitesinin hazır olmasını bekleyin."
+        sleep 30
+    ```
 
-````yaml
-# 7.ADIM: Manuel Onay Adımı
-  manual-approval-for-prod:
-    needs: dynamic-analysis-DAST
-    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-    steps:
-      - name: Manual approval to deploy to production
-        uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ secrets.GITOPS_PAT }}
-          approvers: mehmetkanus17
-          minimum-approvals: 1
-          issue-title: "Deployment Approval for Production - ${{ github.sha }}"
-          issue-body: |
-            Uygulama ${{ github.sha }} versiyonu üretim ortamına dağıtılmak üzere hazır.
-            Lütfen inceleyin ve onaylamak için 'approve' veya reddetmek için 'deny' yazın.
-            DAST Raporları: [ZAP Raporları](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-````
+2.  **ZAP Baseline Scan (DAST)**: OWASP ZAP (Zed Attack Proxy) kullanarak uygulamanın temel güvenlik taramasını yapar. Bu tarama, dağıtılan uygulamanın bilinen güvenlik açıklarına karşı kontrol edilmesini sağlar. Tarama sonuçları GitHub Actions iş akışı çıktısında görüntülenebilir ve daha sonra manuel onay adımında referans olarak kullanılabilir.
+    ```yaml
+    - name: ZAP Baseline Scan (DAST)
+      uses: zaproxy/action-baseline@v0.14.0
+      with:
+        token: ${{ secrets.GITOPS_PAT }}
+        docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
+        target: 'https://${{ env.DEV_APP_URL }}'
+        cmd_options: '-a'
+    ```
 
-(7) Prod Ortamına Dağıtım Öncesi Manuel Onay Adımı:
+Bu iş, uygulamanın çalışma zamanı güvenliğini doğrulamak için kritik bir adımdır ve potansiyel zafiyetlerin üretim ortamına ulaşmadan önce tespit edilmesine yardımcı olur.
 
-manual-approval-for-prod Job'u: dynamic-analysis-DAST job'ı tamamlandıktan sonra, üretim ortamına dağıtım yapılmadan önce manuel bir onay adımı eklenir.
+### Manuel Onay Adımı (`manual-approval-for-prod`)
 
-trstringer/manual-approval@v1: Bu eylem, belirli kişilerin (burada mehmetkanus17) dağıtımı onaylamasını veya reddetmesini gerektiren bir GitHub Issue oluşturur. Bu, kritik üretim ortamlarına yapılan dağıtımların kontrol altında tutulmasını ve istenmeyen değişikliklerin önüne geçilmesini sağlar. Onay mekanizması, güvenlik ve uyumluluk açısından önemli bir kontrol noktasıdır. Issue body kısmına DAST raporlarına yönlendiren bir link eklenerek ilgili raporların kolayca incelenmesi sağlanmıştır.
+Bu iş, uygulamanın üretim ortamına dağıtılmasından önce manuel bir onay süreci sağlar. Bu, kritik dağıtımlar için ek bir güvenlik katmanı ve kontrol noktası sunar.
 
-````yaml
-# 8.ADIM: prod konfigürasyonu ile prod ortamına deploy edilmesi
-  deploy-to-prod:
-    needs: manual-approval-for-prod
-    if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Update GitOps deployment repo
-        run: |
-          git clone https://${{ secrets.GITOPS_PAT }}@github.com/${{ env.GITOPS_REPO }} gitops
-          cd gitops
+*   **`needs: dynamic-analysis-DAST`**: Bu işin `dynamic-analysis-DAST` işi başarıyla tamamlandıktan sonra çalışacağını belirtir.
+*   **`if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'`**: Bu koşul, işin yalnızca `workflow_dispatch` olayı tarafından tetiklenmediğinde veya `workflow_dispatch` ile tetiklendiğinde `run-all` seçeneği belirlendiğinde çalışmasını sağlar.
 
-          # Güncel image tag'i
-          export APP_IMAGE="${{ env.APP_IMAGE }}"
-          export TAG="${{ github.sha }}"
+#### Adımlar:
 
-          sed -i "s|newTag: .*|newTag: ${TAG}|g" ./overlays/prod/kustomization.yaml
+1.  **Manual approval to deploy to production**: `trstringer/manual-approval@v1` GitHub Action kullanılarak bir manuel onay adımı oluşturulur. Bu adım, belirtilen onaylayıcılardan (`mehmetkanus17`) en az birinin onayı olmadan pipeline'ın ilerlemesini engeller. Onay süreci, bir GitHub Issue oluşturularak yönetilir ve DAST raporlarına bir bağlantı içerir.
+    ```yaml
+    - name: Manual approval to deploy to production
+      uses: trstringer/manual-approval@v1
+      with:
+        secret: ${{ secrets.GITOPS_PAT }}
+        approvers: mehmetkanus17
+        minimum-approvals: 1
+        issue-title: "Deployment Approval for Production - ${{ github.sha }}"
+        issue-body: |
+          Uygulama ${{ github.sha }} versiyonu üretim ortamına dağıtılmak üzere hazır.
+          Lütfen inceleyin ve onaylamak için \'approve\' veya reddetmek için \'deny\' yazın.
+          DAST Raporları: [ZAP Raporları](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+    ```
 
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add ./overlays/prod/kustomization.yaml
-          git commit -m "Update image:${{ env.APP_IMAGE }} tag to ${TAG}"
-          git push origin main
-````
+Bu manuel onay adımı, üretim ortamına yapılan dağıtımların insan müdahalesi ve onayı ile gerçekleşmesini sağlayarak olası hataları veya güvenlik açıklarını önlemeye yardımcı olur.
 
-(8) Prod Ortamına Dağıtımın Tetiklenmesi:
+### Prod Ortamına Dağıtım (`deploy-to-prod`)
 
-deploy-to-prod Job'u: Manuel onay adımı başarıyla geçildikten sonra bu adım çalışır.
+Bu iş, uygulamanın üretim (prod) ortamına dağıtımını yönetir. `deploy-to-dev` işine benzer şekilde, GitOps prensiplerine uygun olarak Kubernetes manifestlerinin bulunduğu GitOps deposunu güncelleyerek dağıtımı tetikler.
 
-GitOps Deposu Güncelleme (Update GitOps deployment repo): deploy-to-dev adımına benzer şekilde, bu kez prod ortamına ait kustomization.yaml dosyası içindeki uygulamanın imaj etiketi güncellenir. Bu değişiklik GitOps deposuna commit edilerek main dalına pushlanır.
+*   **`needs: manual-approval-for-prod`**: Bu işin `manual-approval-for-prod` işi başarıyla tamamlandıktan ve onaylandıktan sonra çalışacağını belirtir.
+*   **`if: github.event_name != 'workflow_dispatch' || inputs.run-options == 'run-all'`**: Bu koşul, işin yalnızca `workflow_dispatch` olayı tarafından tetiklenmediğinde veya `workflow_dispatch` ile tetiklendiğinde `run-all` seçeneği belirlendiğinde çalışmasını sağlar.
 
-ArgoCD Tetiklenmesi: GitOps deposundaki bu değişiklik, ArgoCD tarafından algılanır ve üretim ortamındaki uygulamanın dağıtımını otomatik olarak günceller. Bu, manuel müdahale olmadan güvenli ve otomatik bir üretim dağıtımı sağlar.
+#### Adımlar:
 
-(9) Geliştirme Dalının Master/Main Dalına Birleştirilmesi:
-Bu adım, GitHub Actions workflow dosyasında açıkça bir merge işlemi olarak yer almamaktadır. Ancak, gerçek bir CI/CD sürecinde, üretim ortamına dağıtım başarılı olduktan sonra veya manuel onay sonrası, geliştirmenin yapıldığı feature dalının main dalına birleştirilmesi beklenir. Bu birleştirme genellikle bir Pull Request (PR) aracılığıyla yapılır ve PR'ın kabul edilmesiyle main dalı güncel hale gelir. Bu adım, kod tabanının her zaman güncel kalmasını ve main dalının her zaman dağıtıma hazır bir durumu temsil etmesini sağlar.
+1.  **Update GitOps deployment repo**: Bu adım, uygulamanın yeni imaj etiketini (tag) GitOps deposundaki `prod` ortamına ait `kustomization.yaml` dosyasına yazar. Bu değişiklik, ArgoCD tarafından algılanacak ve uygulamanın `prod` ortamında güncellenmiş imaj ile dağıtılmasını tetikleyecektir.
 
-Sonuç
-Bu CI/CD pipeline'ı, .NET Core uygulamasının geliştirilmesinden üretime dağıtımına kadar olan tüm süreci otomatize etmektedir. GitHub Actions ile entegrasyon, güvenlik analizleri (SAST, DAST), GitOps prensipleriyle ArgoCD üzerinden dağıtım ve manuel onay adımları gibi modern DevOps uygulamalarını bir araya getirerek güvenli, hızlı ve tutarlı bir yazılım teslim süreci sunmaktadır. "Her şeyi kod olarak yap" ve "doğru iş için doğru aracı kullan" felsefeleri, pipeline'ın tasarımında ve uygulamasında temel prensipler olarak benimsenmiştir.
+    ```bash
+    - name: Update GitOps deployment repo
+      run: |
+        git clone https://${{ secrets.GITOPS_PAT }}@github.com/${{ env.GITOPS_REPO }} gitops
+        cd gitops
+
+        # Güncel image tag\`i
+        export APP_IMAGE="${{ env.APP_IMAGE }}"
+        export TAG="${{ github.sha }}"
+
+        sed -i "s|newTag: .*|newTag: ${TAG}|g" ./overlays/prod/kustomization.yaml
+
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add ./overlays/prod/kustomization.yaml
+        git commit -m "Update image:${{ env.APP_IMAGE }} tag to ${TAG}"
+        git push origin main
+    ```
+
+Bu iş, uygulamanın üretim ortamına güvenli ve otomatik bir şekilde dağıtılmasını sağlar, böylece en son kararlı sürüm kullanıcılar için erişilebilir hale gelir.
+
+## 5. Kullanılan Araçlar ve Teknolojiler
+
+Bu CI/CD pipeline, modern DevOps uygulamalarını desteklemek için çeşitli araç ve teknolojilerden faydalanmaktadır:
+
+*   **GitHub Actions**: CI/CD iş akışlarını otomatikleştirmek için kullanılan ana platform.
+*   **Docker**: Uygulama konteynerlerini oluşturmak ve yönetmek için kullanılır.
+*   **Harbor**: Özel Docker imajlarının depolanması ve yönetilmesi için kullanılan container registry.
+*   **Trivy**: Statik Uygulama Güvenlik Testi (SAST) için kullanılan açık kaynaklı bir güvenlik tarayıcısı. Hem dosya sistemi hem de Docker imajları üzerinde güvenlik açığı taraması yapar.
+*   **OWASP ZAP (Zed Attack Proxy)**: Dinamik Uygulama Güvenlik Testi (DAST) için kullanılan açık kaynaklı bir web uygulaması güvenlik tarayıcısı.
+*   **GitOps (Kustomize, ArgoCD)**: Kubernetes manifestlerini yönetmek ve uygulamaları Git deposundaki değişikliklere göre otomatik olarak dağıtmak için kullanılan prensip ve araçlar. Bu pipeline özelinde Kustomize ile manifestler özelleştirilir ve GitOps deposuna commit edilerek CD aracı tarafından dağıtım tetiklenir.
+*   **Kubernetes**: Uygulamaların dağıtıldığı ve yönetildiği konteyner orkestrasyon platformu.
+*   **`trstringer/manual-approval@v1`**: Üretim dağıtımlarından önce manuel onay adımı sağlamak için kullanılan GitHub Action.
+
+Bu araçların birleşimi, `SimpleTodoApp` için sağlam, güvenli ve otomatik bir CI/CD süreci oluşturur.
+
+## 6. Case Felsefesi ile Uyum
+
+Bu CI/CD pipeline, DevOps Uygulama Görevi (Case) tarafından belirlenen temel felsefeler ve gereksinimlerle tam uyum içindedir:
+
+*   **Her şeyi "as code" olarak yapmak**: Tüm pipeline adımları, uygulama ve Kubernetes manifestleri (Kustomize ile) kod olarak tanımlanmıştır. Bu, versiyon kontrolü, tekrarlanabilirlik ve otomasyon sağlar.
+
+*   **Doğru iş için doğru aracı kullanmak**: GitHub Actions CI için, Harbor imaj depolama için, Trivy ve ZAP güvenlik analizleri için, Kustomize ve GitOps (ArgoCD ile) dağıtım için kullanılmıştır. Her araç, belirli bir ihtiyacı karşılamak üzere seçilmiştir.
+
+*   **Ortaya çıkacak yapının modüler ve genişleyebilir olması**: Pipeline, farklı ortamlar (`dev`, `prod`) için ayrı dağıtım adımları ve Kustomize overlayleri ile modüler bir yapıya sahiptir. Bu, gelecekteki genişlemelere ve yeni ortamların eklenmesine olanak tanır.
+
+### CICD Felsefesi
+
+CI/CD gereksinimleri, bu pipeline içinde aşağıdaki gibi karşılanmıştır:
+
+*   **Kod Değişikliklerinin Tetiklenmesi**: `push` ve `pull_request` olayları ile pipeline tetiklenir. Ayrıca `workflow_dispatch` ile manuel tetikleme seçeneği sunulur.
+*   **Statik Kod Analizi (SAST)**: Trivy kullanılarak dosya sistemi ve Docker imajı üzerinde SAST taramaları yapılır.
+*   **Kod Derleme ve İmaj Oluşturma**: Uygulama kodu derlenir ve yeni bir konteyner imajı oluşturularak Harbor container registry'yene gönderilir.
+*   **CD Aracının Tetiklenmesi**: CI aracı (GitHub Actions), Kubernetes manifestlerinin bulunduğu GitOps deposuna (örneğin `manifest-mehmetkanus`) gerekli değişiklikleri (`newTag` güncellemesi) push ederek CD aracını (ArgoCD) tetikler. Bu, CI aracının doğrudan dağıtım yapmaması, bunun yerine CD aracını tetiklemesi prensibine uyar.
+*   **Dev ve Prod Ortamları**: Tek Kubernetes kümesi içinde `dev` ve `prod` namespace seviyesinde ayrılmış ortamlar bulunur. Ortama özel konfigürasyonlar Kustomize ile yönetilir.
+*   **Dinamik Güvenlik Analizi (DAST)**: `dev` ortamına dağıtımdan sonra OWASP ZAP kullanılarak DAST taraması yapılır.
+*   **Manuel Onay Adımı**: Üretim ortamına dağıtımdan önce manuel onay adımı (`trstringer/manual-approval`) eklenmiştir.
+
+Bu README, `SimpleTodoApp` projesinin CI/CD süreçlerini anlamak ve yönetmek için kapsamlı bir rehber sunmaktadır.
