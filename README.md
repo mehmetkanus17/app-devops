@@ -314,9 +314,9 @@ Bu CI/CD pipeline, modern DevOps uygulamalarını desteklemek için çeşitli ar
 
 Bu araçların birleşimi, `SimpleTodoApp` için sağlam, güvenli ve otomatik bir CI/CD süreci oluşturur.
 
-## 6. Case Felsefesi ile Uyum
+## 6. CI/CD Felsefesi ile Uyum
 
-Bu CI/CD pipeline, DevOps Uygulama Görevi (Case) tarafından belirlenen temel felsefeler ve gereksinimlerle tam uyum içindedir:
+Bu CI/CD pipeline, DevOps Uygulama Görevi proje tarafından belirlenen temel felsefeler ve gereksinimlerle tam uyum içindedir:
 
 *   **Her şeyi "as code" olarak yapmak**: Tüm pipeline adımları, uygulama ve Kubernetes manifestleri (Kustomize ile) kod olarak tanımlanmıştır. Bu, versiyon kontrolü, tekrarlanabilirlik ve otomasyon sağlar.
 
