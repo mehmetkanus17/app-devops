@@ -37,8 +37,8 @@ on:
       #   default: 'false'
 env:
   APP_NAME: simple-todo-app
-  HARBOR_URL: harbor.prod.goxdev.lol
-  APP_IMAGE: harbor.prod.goxdev.lol/app-mehmetkanus/todoapp
+  HARBOR_URL: harbor.prod.mehmetkanus.com
+  APP_IMAGE: harbor.prod.mehmetkanus.com/app-mehmetkanus/todoapp
   GITOPS_REPO: ${{ github.repository_owner }}/manifest-mehmetkanus
   DOCKERFILE_PATH: ./SimpleTodoApp/Dockerfile
   APP_SOURCE_DIR: ./SimpleTodoApp
